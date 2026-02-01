@@ -65,10 +65,27 @@ io.on('connection', (socket) => {
           socket.emit('status-update', status);
 
           // Live polling every 30s
-          activePoll = setInterval(async () => {
-            const updated = await trackPackage(trackingNumber);
-            socket.emit('status-update', updated);
-          }, 30000);
+          let lastStatus = null;
+
+activePoll = setInterval(async () => {
+  const updated = await trackPackage(trackingNumber);
+
+  if (updated.status !== lastStatus) {
+    socket.emit('status-update', updated);
+
+    if (updated.status === 'Out for Delivery') {
+      socket.emit('bot-reply', '🚚 Your package is OUT FOR DELIVERY today!');
+    }
+
+    if (updated.status === 'Delivered') {
+      socket.emit('bot-reply', '🎉 Package delivered successfully!');
+      clearInterval(activePoll);
+    }
+
+    lastStatus = updated.status;
+  }
+}, 30000);
+
         } else {
           socket.emit('bot-reply', 'Tracking cancelled.');
         }
