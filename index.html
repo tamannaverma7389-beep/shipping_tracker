@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shipping Tracker Chatbot 🚚</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+    }
+    .container { 
+      width: 90%; max-width: 800px; 
+      background: white; 
+      border-radius: 20px; 
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .header { 
+      background: linear-gradient(45deg, #ff6b6b, #feca57); 
+      color: white; 
+      padding: 20px; 
+      text-align: center; 
+    }
+    #chat { 
+      height: 400px; 
+      overflow-y: auto; 
+      padding: 20px; 
+      background: #f8f9fa; 
+      border-bottom: 1px solid #eee;
+    }
+    .message { margin: 10px 0; }
+    .user { text-align: right; }
+    .user .bubble { background: #007bff; color: white; }
+    .bot { text-align: left; }
+    .bot .bubble { background: white; border: 1px solid #ddd; }
+    .bubble { 
+      display: inline-block; 
+      padding: 12px 18px; 
+      border-radius: 20px; 
+      max-width: 70%; 
+      word-wrap: break-word;
+    }
+    #status-display { 
+      padding: 15px 20px; 
+      background: #e8f5e8; 
+      border-bottom: 1px solid #c3e6c3; 
+      display: none; 
+    }
+    .status-item { margin: 8px 0; font-size: 14px; }
+    .input-area { 
+      padding: 20px; 
+      background: white; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 15px; 
+    }
+    #message { 
+      flex: 1; 
+      padding: 15px; 
+      border: 2px solid #eee; 
+      border-radius: 25px; 
+      font-size: 16px; 
+      outline: none; 
+    }
+    #message:focus { border-color: #007bff; }
+    .buttons { 
+      display: flex; 
+      gap: 10px; 
+      flex-wrap: wrap; 
+    }
+    button { 
+      padding: 12px 20px; 
+      border: none; 
+      border-radius: 25px; 
+      cursor: pointer; 
+      font-weight: 500; 
+      transition: all 0.3s; 
+      flex: 1; 
+      min-width: 80px;
+    }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-info { background: #17a2b8; color: white; }
+    button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>📦 Shipping Tracker Bot</h2>
+      <p>Real-time package tracking with MongoDB persistence</p>
+    </div>
+    
+    <div id="chat"></div>
+    
+    <div id="status-display">
+      <h4>📍 Live Status Updates</h4>
+      <div id="status-details"></div>
+    </div>
+    
+    <div class="input-area">
+      <div class="buttons">
+        <button class="btn-info" onclick="quickReply('YES')">✅ YES</button>
+        <button class="btn-danger" onclick="quickReply('NO')">❌ NO</button>
+        <button class="btn-success" onclick="sendHistory()">📜 History</button>
+        <button class="btn-info" onclick="sendHelp()">ℹ️ Help</button>
+        <button class="btn-danger" onclick="clearChat()">🗑️ Clear</button>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <input id="message" placeholder="Type 'track 1Z123456789012345' or ask for help..." maxlength="200">
+        <button class="btn-primary" onclick="sendMessage()" style="width: 70px;">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io('http://localhost:3000');
+    const chat = document.getElementById('chat');
+    const message = document.getElementById('message');
+    const statusDisplay = document.getElementById('status-display');
+
+    // Add message to chat
+    function addMessage(text, sender) {
+      const div = document.createElement('div');
+      div.className = `message ${sender}`;
+      div.innerHTML = `<div class="bubble">${text}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Socket events
+    socket.on('bot-reply', (reply) => {
+      addMessage(reply, 'bot');
+    });
+
+    socket.on('status-update', (status) => {
+      statusDisplay.style.display = 'block';
+      document.getElementById('status-details').innerHTML = `
+        <div class="status-item">📍 <strong>Status:</strong> ${status.status}</div>
+        <div class="status-item">📍 <strong>Location:</strong> ${status.location}</div>
+        <div class="status-item">⏰ <strong>ETA:</strong> ${status.eta}</div>
+        <div class="status-item">📝 <strong>Details:</strong> ${status.details || ''}</div>
+      `;
+      chat.scrollTop = chat.scrollHeight;
+    });
+
+    // User actions
+    function sendMessage() {
+      const msg = message.value.trim();
+      if (!msg) return;
+      
+      addMessage(msg, 'user');
+      socket.emit('message', msg);
+      message.value = '';
+    }
+
+    function quickReply(reply) {
+      addMessage(reply, 'user');
+      socket.emit('confirm', reply);
+    }
+
+    function sendHistory() {
+      addMessage('history', 'user');
+      socket.emit('history');
+    }
+
+    function sendHelp() {
+      addMessage('help', 'user');
+      socket.emit('message', 'help');
+    }
+
+    function clearChat() {
+      chat.innerHTML = '';
+      statusDisplay.style.display = 'none';
+      addMessage('Chat cleared! Say "track [number]" to begin.', 'bot');
+    }
+
+    // Event listeners
+    message.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Welcome message
+    socket.on('connect', () => {
+      setTimeout(() => {
+        addMessage('Hi! 👋 Say "track 1Z123456789012345" to track a package or type "help" for commands.', 'bot');
+      }, 500);
+    });
+
+    // Auto-resize chat
+    chat.addEventListener('DOMNodeInserted', () => {
+      chat.scrollTop = chat.scrollHeight;
+    });
+  </script>
+</body>
+</html>
