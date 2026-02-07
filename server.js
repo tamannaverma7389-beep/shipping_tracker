@@ -4,6 +4,8 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 require('dotenv').config();
 const { connectMongoDb } = require('./connection');
+const Tracking = require('./models');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -15,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 connectMongoDb();
-console.log("Mongo URL:", process.env.MONGO_URL);
+console.log("test", process.env.MONGO_URL);
 
 // Mock tracking function
 const trackPackage = async (trackingNumber) => {
@@ -61,6 +63,13 @@ io.on('connection', (socket) => {
       socket.once('confirm', async (answer) => {
         if (answer === 'YES') {
           const status = await trackPackage(trackingNumber);
+          await Tracking.create({
+          trackingNumber,
+          status: status.status,
+          location: status.location,
+          eta: status.eta,
+          details: status.details
+          });
           socket.emit('bot-reply', 'Tracking started 🚚');
           socket.emit('status-update', status);
 
